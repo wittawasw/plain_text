@@ -1,0 +1,8 @@
+[package]
+name = "plain_text"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fltk = { version = "1.5.22", features = ["fltk-bundled"] }
+rfd = "0.15.4"
