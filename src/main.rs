@@ -19,6 +19,7 @@ struct SearchState {
     results: Vec<(i32, i32)>,
     current: usize,
     visible: bool,
+    filepath: String,
 }
 
 fn main() {
@@ -31,15 +32,18 @@ fn main() {
 
     let buf = Rc::new(RefCell::new(TextBuffer::default()));
 
-    let mut editor = TextEditor::new(0, 60, 800, 540, "");
+    let mut editor = TextEditor::new(0, 60, 800, 510, "");
     editor.set_buffer(Some(buf.borrow().clone()));
     editor.set_scrollbar_size(16);
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
 
+    let status_bar = Rc::new(RefCell::new(Frame::new(0, 570, 800, 30, "")));
+    status_bar.borrow_mut().set_label("Ready");
+
     let search_group = Rc::new(RefCell::new(Group::new(0, 30, 800, 30, "")));
 
     let mut search_input = Input::new(60, 35, 200, 20, "");
-    let case_btn = CheckButton::new(270, 35, 90, 20, "Aa");
+    let mut case_btn = CheckButton::new(270, 35, 90, 20, "Aa");
     let mut prev_btn = Button::new(370, 35, 60, 20, "Prev");
     let mut next_btn = Button::new(440, 35, 60, 20, "Next");
     let status = Rc::new(RefCell::new(Frame::new(510, 35, 200, 20, "")));
@@ -48,8 +52,10 @@ fn main() {
         let sg = search_group.borrow();
         Group::end(&*sg);
     }
-
+    search_group.borrow_mut().resize(0, 30, 800, 0);
     search_group.borrow_mut().hide();
+
+    editor.resize(0, 30, 800, 570);
 
     let stylebuf = Rc::new(RefCell::new(TextBuffer::default()));
     let styles = vec![
@@ -70,33 +76,60 @@ fn main() {
         results: vec![],
         current: 0,
         visible: false,
+        filepath: "".to_string(),
     }));
 
-    // --- Drag & Drop Anywhere on Editor ---
+    let update_status = {
+        let status_bar = Rc::clone(&status_bar);
+        let state = Rc::clone(&state);
+        let editor = editor.clone();
+
+        move || {
+            let pos = editor.insert_position();
+
+            let line = editor.count_lines(0, pos, false);
+            let col = pos - editor.line_start(pos);
+
+            let filepath = state.borrow().filepath.clone();
+            let path_display = if filepath.is_empty() {
+                "(untitled)".to_string()
+            } else {
+                filepath
+            };
+
+            status_bar.borrow_mut().set_label(&format!(
+                "{}   |   Line {}, Col {}",
+                path_display,
+                line + 1,
+                col + 1
+            ));
+        }
+    };
+
+
     {
         let buf = Rc::clone(&buf);
         let stylebuf = Rc::clone(&stylebuf);
+        let state = Rc::clone(&state);
+        let update_status = update_status.clone();
 
         editor.handle(move |_, ev| match ev {
             Event::DndEnter | Event::DndDrag | Event::DndRelease => true,
-
             Event::Paste => {
                 let dropped = app::event_text().trim().to_string();
-
                 if dropped.is_empty() {
                     return false;
                 }
-
                 if let Ok(content) = fs::read_to_string(&dropped) {
                     let len = content.len();
                     buf.borrow_mut().set_text(&content);
                     stylebuf.borrow_mut().set_text(&"A".repeat(len.max(1)));
+                    state.borrow_mut().filepath = dropped.clone();
+                    update_status();
                     return true;
                 }
-
                 false
             }
-
             _ => false,
         });
     }
@@ -109,9 +142,7 @@ fn main() {
         Rc::new(move |pattern: String, cs: bool| -> Vec<(i32, i32)> {
             let text = buf.borrow().text();
             let len = text.len();
-
             stylebuf.borrow_mut().set_text(&"A".repeat(len.max(1)));
-
             if pattern.is_empty() {
                 status.borrow_mut().set_label("");
                 return vec![];
@@ -149,10 +180,13 @@ fn main() {
     let goto_match = {
         let buf = Rc::clone(&buf);
         let mut editor = editor.clone();
+        let update_status = update_status.clone();
+
         move |s: i32, e: i32| {
             editor.set_insert_position(s);
             editor.show_insert_position();
             buf.borrow_mut().select(s, e);
+            update_status();
         }
     };
 
@@ -162,6 +196,7 @@ fn main() {
         let case_btn = case_btn.clone();
         let buf = Rc::clone(&buf);
         let mut editor = editor.clone();
+        let update_status = update_status.clone();
 
         search_input.set_trigger(CallbackTrigger::Changed);
         search_input.set_callback(move |inp| {
@@ -175,6 +210,8 @@ fn main() {
                 editor.show_insert_position();
                 buf.borrow_mut().select(*s, *e);
             }
+
+            update_status();
         });
     }
 
@@ -216,10 +253,8 @@ fn main() {
         let mut search_input = search_input.clone();
         let buf = Rc::clone(&buf);
         let mut editor = editor.clone();
-        let mut win_clone = win.clone();    // <-- IMPORTANT FIX
-
-        // search_group.borrow_mut().resize(0, 30, 800, 0);
-        editor.resize(0, 30, 800, 570);
+        let mut win_clone = win.clone();
+        let update_status = update_status.clone();
 
         win.handle(move |_, ev| match ev {
             Event::Shortcut => {
@@ -233,17 +268,17 @@ fn main() {
                     s.visible = !s.visible;
 
                     if s.visible {
-                        // SHOW
+                        search_group.borrow_mut().resize(0, 30, 800, 30);
                         search_group.borrow_mut().show();
-                        editor.resize(0, 60, 800, 540);
+                        editor.resize(0, 60, 800, 510);
                         search_input.take_focus().ok();
                     } else {
-                        // HIDE
+                        search_group.borrow_mut().resize(0, 30, 800, 0);
                         search_group.borrow_mut().hide();
-                        editor.resize(0, 30, 800, 570);
+                        editor.resize(0, 30, 800, 540);
                     }
 
-                    win_clone.redraw();   // <-- use clone here
+                    win_clone.redraw();
                     return true;
                 }
                 false
@@ -260,6 +295,7 @@ fn main() {
                         editor.set_insert_position(s);
                         editor.show_insert_position();
                         buf.borrow_mut().select(s, e);
+                        update_status();
                         return true;
                     }
 
@@ -273,10 +309,10 @@ fn main() {
                         editor.set_insert_position(s);
                         editor.show_insert_position();
                         buf.borrow_mut().select(s, e);
+                        update_status();
                         return true;
                     }
                 }
-
                 false
             }
 
@@ -284,10 +320,11 @@ fn main() {
         });
     }
 
-
     {
         let buf = Rc::clone(&buf);
         let stylebuf = Rc::clone(&stylebuf);
+        let state = Rc::clone(&state);
+        let update_status = update_status.clone();
 
         menu.add("File/Open\t", Shortcut::Ctrl | 'o', MenuFlag::Normal, move |_| {
             if let Some(path) = dialog::file_chooser("Open File", "*", ".", false) {
@@ -295,6 +332,8 @@ fn main() {
                     let len = content.len();
                     buf.borrow_mut().set_text(&content);
                     stylebuf.borrow_mut().set_text(&"A".repeat(len.max(1)));
+                    state.borrow_mut().filepath = path.clone();
+                    update_status();
                 }
             }
         });
@@ -302,16 +341,27 @@ fn main() {
 
     {
         let buf = Rc::clone(&buf);
+        let state = Rc::clone(&state);
+        let update_status = update_status.clone();
 
         menu.add("File/Save As\t", Shortcut::Ctrl | 's', MenuFlag::Normal, move |_| {
             if let Some(path) = dialog::file_chooser("Save File", "*", ".", true) {
                 let text = buf.borrow().text();
-                let _ = fs::write(path, text);
+                let _ = fs::write(&path, text);
+                state.borrow_mut().filepath = path.clone();
+                update_status();
             }
         });
     }
 
     menu.add("File/Quit\t", Shortcut::Ctrl | 'q', MenuFlag::Normal, |_| app::quit());
+
+    {
+        let update_status = update_status.clone();
+        editor.set_callback(move |_| {
+            update_status();
+        });
+    }
 
     win.end();
     win.show();
