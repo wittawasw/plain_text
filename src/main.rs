@@ -38,6 +38,13 @@ fn main() {
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
 
     let status_bar = Rc::new(RefCell::new(Frame::new(0, 570, 800, 30, "")));
+{
+    let mut sb = status_bar.borrow_mut();
+    sb.set_color(Color::from_hex(0xf0f0f0));
+    sb.set_frame(FrameType::FlatBox);
+    sb.set_label_color(Color::Black);
+    sb.set_align(Align::Left | Align::Inside);
+}
     status_bar.borrow_mut().set_label("Ready");
 
     let search_group = Rc::new(RefCell::new(Group::new(0, 30, 800, 30, "")));
@@ -98,14 +105,13 @@ fn main() {
             };
 
             status_bar.borrow_mut().set_label(&format!(
-                "{}   |   Line {}, Col {}",
-                path_display,
+                "Line {}, Col {}   |   {}",
                 line + 1,
-                col + 1
+                col + 1,
+                path_display
             ));
-        }
+                    }
     };
-
 
     {
         let buf = Rc::clone(&buf);
@@ -115,6 +121,7 @@ fn main() {
 
         editor.handle(move |_, ev| match ev {
             Event::DndEnter | Event::DndDrag | Event::DndRelease => true,
+
             Event::Paste => {
                 let dropped = app::event_text().trim().to_string();
                 if dropped.is_empty() {
@@ -130,6 +137,17 @@ fn main() {
                 }
                 false
             }
+
+            Event::KeyDown
+            | Event::KeyUp
+            | Event::Push
+            | Event::Released
+            | Event::Drag
+            | Event::MouseWheel => {
+                update_status();
+                false
+            }
+
             _ => false,
         });
     }
