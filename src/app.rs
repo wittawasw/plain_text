@@ -52,7 +52,7 @@ pub fn run() {
     let search_group = Rc::new(RefCell::new(Group::new(0, 30, 800, 30, "")));
 
     let mut search_input = Input::new(60, 35, 200, 20, "");
-    let mut case_btn = CheckButton::new(270, 35, 90, 20, "Aa");
+    let case_btn = CheckButton::new(270, 35, 90, 20, "Aa");
     let mut prev_btn = Button::new(370, 35, 60, 20, "Prev");
     let mut next_btn = Button::new(440, 35, 60, 20, "Next");
     let status = Rc::new(RefCell::new(Frame::new(510, 35, 200, 20, "")));
