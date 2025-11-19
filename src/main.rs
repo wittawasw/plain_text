@@ -37,15 +37,17 @@ fn main() {
     editor.set_buffer(Some(buf.borrow().clone()));
     editor.set_scrollbar_size(16);
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
+    editor.set_text_font(Font::Helvetica);
+    editor.set_text_size(app::font_size());
 
     let status_bar = Rc::new(RefCell::new(Frame::new(0, 570, 800, 30, "")));
-{
-    let mut sb = status_bar.borrow_mut();
-    sb.set_color(Color::from_hex(0xf0f0f0));
-    sb.set_frame(FrameType::FlatBox);
-    sb.set_label_color(Color::Black);
-    sb.set_align(Align::Left | Align::Inside);
-}
+    {
+        let mut sb = status_bar.borrow_mut();
+        sb.set_color(Color::from_hex(0xf0f0f0));
+        sb.set_frame(FrameType::FlatBox);
+        sb.set_label_color(Color::Black);
+        sb.set_align(Align::Left | Align::Inside);
+    }
     status_bar.borrow_mut().set_label("Ready");
 
     let search_group = Rc::new(RefCell::new(Group::new(0, 30, 800, 30, "")));
@@ -69,13 +71,13 @@ fn main() {
     let styles = vec![
         StyleTableEntry {
             color: Color::Black,
-            font: Font::Screen,
-            size: 14,
+            font: Font::Helvetica,
+            size: app::font_size(),
         },
         StyleTableEntry {
             color: Color::Black,
             font: Font::HelveticaBold,
-            size: 14,
+            size: app::font_size(),
         },
     ];
     editor.set_highlight_data(stylebuf.borrow().clone(), styles);
@@ -111,7 +113,7 @@ fn main() {
                 col + 1,
                 path_display
             ));
-                    }
+        }
     };
 
     {
