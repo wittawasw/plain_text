@@ -26,6 +26,7 @@ fn main() {
     let app = app::App::default();
 
     let mut win = Window::new(100, 100, 800, 600, "PlainText");
+    win.make_resizable(true);
     win.set_color(Color::White);
 
     let mut menu = MenuBar::new(0, 0, 800, 30, "");
@@ -382,6 +383,25 @@ fn main() {
     }
 
     win.end();
+
+    {
+        let mut editor = editor.clone();
+        let status_bar = Rc::clone(&status_bar);
+        let search_group = Rc::clone(&search_group);
+        let state = Rc::clone(&state);
+
+        win.resize_callback(move |_win, _x, _y, w, h| {
+            let search_h = if state.borrow().visible { 30 } else { 0 };
+
+            let editor_y = 30 + search_h;
+            let editor_h = h - editor_y - 30;
+
+            search_group.borrow_mut().resize(0, 30, w, search_h);
+            editor.resize(0, editor_y, w, editor_h);
+            status_bar.borrow_mut().resize(0, h - 30, w, 30);
+        });
+    }
+
     win.show();
     app.run().unwrap();
 }
