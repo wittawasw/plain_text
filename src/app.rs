@@ -1,7 +1,6 @@
 use fltk::{
     app,
     enums::*,
-    frame::Frame,
     menu::MenuBar,
     prelude::*,
     text::{self, StyleTableEntry, TextBuffer, TextEditor},
@@ -11,7 +10,10 @@ use std::{cell::RefCell, rc::Rc, fs};
 
 mod menu;
 mod search;
+mod status;
+
 use search::{create_search_ui, attach_search_logic, SearchState};
+use status::{create_status_bar, make_update_status};
 
 pub fn run() {
     let app = app::App::default();
@@ -28,7 +30,7 @@ pub fn run() {
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
     win.resizable(&editor);
 
-    let status_bar = Rc::new(RefCell::new(Frame::new(0, 570, 800, 30, "")));
+    let status_bar = create_status_bar(0, 570, 800, 30);
 
     let stylebuf = Rc::new(RefCell::new(TextBuffer::default()));
     let styles = vec![
@@ -46,28 +48,7 @@ pub fn run() {
 
     let mut search_ui = create_search_ui(0, 30, 800);
 
-    let update_status: Rc<dyn Fn()> = {
-        let status_bar = Rc::clone(&status_bar);
-        // let buf = Rc::clone(&buf);
-        let editor = editor.clone();
-        let state = Rc::clone(&search_state);
-
-        Rc::new(move || {
-            let pos = editor.insert_position();
-            let line = editor.count_lines(0, pos, false);
-            let col = pos - editor.line_start(pos);
-
-            let fp = state.borrow().filepath.clone();
-            let display = if fp.is_empty() { "(untitled)".into() } else { fp };
-
-            status_bar.borrow_mut().set_label(&format!(
-                "Line {}, Col {}   |   {}",
-                line + 1,
-                col + 1,
-                display
-            ));
-        })
-    };
+    let update_status = make_update_status(&status_bar, &editor, &search_state);
 
     {
         let buf = Rc::clone(&buf);
