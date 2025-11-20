@@ -26,6 +26,7 @@ pub fn run() {
     editor.set_buffer(Some(buf.borrow().clone()));
     editor.set_scrollbar_size(16);
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
+    win.resizable(&editor);
 
     let status_bar = Rc::new(RefCell::new(Frame::new(0, 570, 800, 30, "")));
 
