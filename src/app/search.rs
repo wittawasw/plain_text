@@ -1,4 +1,3 @@
-// search.rs
 use fltk::{
     enums::CallbackTrigger,
     button::*,

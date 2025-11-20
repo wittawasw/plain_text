@@ -1,4 +1,3 @@
-// app.rs
 use fltk::{
     app,
     enums::*,
@@ -48,7 +47,7 @@ pub fn run() {
 
     let update_status: Rc<dyn Fn()> = {
         let status_bar = Rc::clone(&status_bar);
-        let buf = Rc::clone(&buf);
+        // let buf = Rc::clone(&buf);
         let editor = editor.clone();
         let state = Rc::clone(&search_state);
 
@@ -178,7 +177,6 @@ pub fn run() {
         }
     });
 
-    // menu::add_file_menu_items(&mut menu, &buf, &stylebuf, &search_state, || update_status());
     menu::add_file_menu_items(
         &mut menu,
         &buf,
