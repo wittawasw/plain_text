@@ -1,7 +1,11 @@
 [package]
 name = "plain_text"
+build = "build.rs"
 version = "0.1.0"
 edition = "2024"
+
+[build-dependencies]
+embed-resource = "3.0.6"
 
 [dependencies]
 fltk = { version = "1.5.22", features = ["fltk-bundled"] }
