@@ -8,6 +8,7 @@ use fltk::{
 };
 use std::{cell::RefCell, rc::Rc, fs};
 
+mod icon;
 mod menu;
 mod search;
 mod status;
@@ -18,6 +19,9 @@ use status::{create_status_bar, make_update_status};
 pub fn run() {
     let app = app::App::default();
     let mut win = Window::new(100, 100, 800, 600, "PlainText");
+    let ico = icon::load_app_icon();
+
+    win.set_icon(Some(ico));
     win.make_resizable(true);
 
     let mut menu = MenuBar::new(0, 0, 800, 30, "");
