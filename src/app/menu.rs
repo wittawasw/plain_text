@@ -7,6 +7,7 @@ use fltk::{
 use fltk::prelude::MenuExt;
 use std::{cell::RefCell, fs, rc::Rc};
 
+use super::load_as_utf8;
 use super::SearchState;
 
 pub fn add_file_menu_items<F>(
@@ -27,10 +28,12 @@ where
 
         menu.add("File/Open\t", Shortcut::Ctrl | 'o', MenuFlag::Normal, move |_| {
             if let Some(path) = dialog::file_chooser("Open File", "*", ".", false) {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    let len = content.len();
-                    buf.borrow_mut().set_text(&content);
+                if let Some(text) = load_as_utf8(&path) {
+                    let len = text.len();
+
+                    buf.borrow_mut().set_text(&text);
                     stylebuf.borrow_mut().set_text(&"A".repeat(len.max(1)));
+
                     state.borrow_mut().filepath = path.clone();
                     update_status_open();
                 }
@@ -55,8 +58,10 @@ where
 
             if let Some(path) = path {
                 let text = buf.borrow().text();
-                let _ = fs::write(&path, text);
-                state.borrow_mut().filepath = path.clone();
+                let utf8 = text.as_bytes();
+                fs::write(&path, utf8).ok();
+
+                state.borrow_mut().filepath = path;
                 update_status_save();
             }
         });
@@ -70,8 +75,10 @@ where
         menu.add("File/Save As", Shortcut::None, MenuFlag::Normal, move |_| {
             if let Some(path) = dialog::file_chooser("Save File", "*", ".", true) {
                 let text = buf.borrow().text();
-                let _ = fs::write(&path, text);
-                state.borrow_mut().filepath = path.clone();
+                let utf8 = text.as_bytes();
+                fs::write(&path, utf8).ok();
+
+                state.borrow_mut().filepath = path;
                 update_status_saveas();
             }
         });

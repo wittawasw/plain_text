@@ -6,15 +6,17 @@ use fltk::{
     text::{self, StyleTableEntry, TextBuffer, TextEditor},
     window::Window,
 };
-use std::{cell::RefCell, rc::Rc, fs};
+use std::{cell::RefCell, rc::Rc};
 
 mod icon;
 mod menu;
 mod search;
 mod status;
+mod encoding;
 
 use search::{create_search_ui, attach_search_logic, SearchState};
 use status::{create_status_bar, make_update_status};
+use encoding::load_as_utf8;
 
 pub fn run() {
     let app = app::App::default();
@@ -66,12 +68,15 @@ pub fn run() {
                 if dropped.is_empty() {
                     return false;
                 }
-                if let Ok(content) = fs::read_to_string(&dropped) {
+                if let Some(content) = load_as_utf8(&dropped) {
                     let len = content.len();
+
                     buf.borrow_mut().set_text(&content);
                     stylebuf.borrow_mut().set_text(&"A".repeat(len.max(1)));
+
                     state.borrow_mut().filepath = dropped.clone();
                     update_status();
+
                     return true;
                 }
                 false

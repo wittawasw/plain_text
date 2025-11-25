@@ -8,5 +8,6 @@ edition = "2024"
 embed-resource = "3.0.6"
 
 [dependencies]
+encoding_rs = "0.8.35"
 fltk = { version = "1.5.22", features = ["fltk-bundled"] }
 rfd = "0.15.4"
