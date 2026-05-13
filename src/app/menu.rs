@@ -1,10 +1,10 @@
 use fltk::{
-    dialog,
     enums::*,
     menu::*,
     text::TextBuffer,
 };
 use fltk::prelude::MenuExt;
+use rfd::FileDialog;
 use std::{cell::RefCell, fs, rc::Rc};
 
 use super::load_as_utf8;
@@ -27,14 +27,14 @@ where
         let update_status_open = update_status.clone();
 
         menu.add("File/Open\t", Shortcut::Ctrl | 'o', MenuFlag::Normal, move |_| {
-            if let Some(path) = dialog::file_chooser("Open File", "*", ".", false) {
-                if let Some(text) = load_as_utf8(&path) {
+            if let Some(path) = FileDialog::new().pick_file() {
+                if let Some(text) = load_as_utf8(&path.to_string_lossy()) {
                     let len = text.len();
 
                     buf.borrow_mut().set_text(&text);
                     stylebuf.borrow_mut().set_text(&"A".repeat(len.max(1)));
 
-                    state.borrow_mut().filepath = path.clone();
+                    state.borrow_mut().filepath = path.to_string_lossy().to_string();
                     update_status_open();
                 }
             }
@@ -49,9 +49,8 @@ where
         menu.add("File/Save\t", Shortcut::Ctrl | 's', MenuFlag::Normal, move |_| {
             let current_path = state.borrow().filepath.clone();
 
-            // If no existing file, fallback to Save As
             let path = if current_path.is_empty() {
-                dialog::file_chooser("Save File", "*", ".", true)
+                FileDialog::new().save_file().map(|p| p.to_string_lossy().to_string())
             } else {
                 Some(current_path)
             };
@@ -73,12 +72,12 @@ where
         let update_status_saveas = update_status.clone();
 
         menu.add("File/Save As", Shortcut::None, MenuFlag::Normal, move |_| {
-            if let Some(path) = dialog::file_chooser("Save File", "*", ".", true) {
+            if let Some(path) = FileDialog::new().save_file() {
                 let text = buf.borrow().text();
                 let utf8 = text.as_bytes();
-                fs::write(&path, utf8).ok();
+                fs::write(&*path.to_string_lossy(), utf8).ok();
 
-                state.borrow_mut().filepath = path;
+                state.borrow_mut().filepath = path.to_string_lossy().to_string();
                 update_status_saveas();
             }
         });
