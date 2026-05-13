@@ -29,8 +29,8 @@ pub fn create_search_ui(x: i32, y: i32, w: i32) -> SearchUI {
     let group = Rc::new(RefCell::new(Group::new(x, y, w, 30, "")));
     let input = Input::new(60, y + 5, 200, 20, "");
     let case_btn = CheckButton::new(270, y + 5, 90, 20, "Aa");
-    let prev_btn = Button::new(370, y + 5, 60, 20, "Prev");
-    let next_btn = Button::new(440, y + 5, 60, 20, "Next");
+    let prev_btn = Button::new(370, y + 5, 60, 20, "← Prev");
+    let next_btn = Button::new(440, y + 5, 60, 20, "Next →");
     let status = Rc::new(RefCell::new(Frame::new(510, y + 5, 200, 20, "")));
 
     {
@@ -88,7 +88,7 @@ pub fn attach_search_logic(
                 }
             }
 
-            status.borrow_mut().set_label(&format!("{} match(es)", out.len()));
+            status.borrow_mut().set_label(&format!("{} of {}", 1, out.len()));
             out
         })
     };

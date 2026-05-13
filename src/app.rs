@@ -30,13 +30,14 @@ pub fn run() {
 
     let buf = Rc::new(RefCell::new(TextBuffer::default()));
 
-    let mut editor = TextEditor::new(0, 60, 800, 510, "");
+    let mut editor = TextEditor::new(0, 30 + 44, 800, 510 - 44, "");
     editor.set_buffer(Some(buf.borrow().clone()));
     editor.set_scrollbar_size(16);
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
+    editor.set_text_font(fltk::enums::Font::Courier);
     win.resizable(&editor);
 
-    let status_bar = create_status_bar(0, 570, 800, 30);
+    let status_bar = create_status_bar(0, 570 + 44 - 30, 800, 30);
 
     let stylebuf = Rc::new(RefCell::new(TextBuffer::default()));
     let styles = vec![
@@ -116,14 +117,14 @@ pub fn run() {
                     s.visible = !s.visible;
 
                     if s.visible {
-                        search_ui_group.borrow_mut().resize(0, 30, 800, 30);
+                        search_ui_group.borrow_mut().resize(0, 30, 800, 44);
                         search_ui_group.borrow_mut().show();
-                        editor.resize(0, 60, 800, 510);
+                        editor.resize(0, 74, 800, 510 - 44);
                         search_ui.input.take_focus().ok();
                     } else {
                         search_ui_group.borrow_mut().resize(0, 30, 800, 0);
                         search_ui_group.borrow_mut().hide();
-                        editor.resize(0, 30, 800, 540);
+                        editor.resize(0, 30, 800, 510);
                     }
 
                     win_clone.redraw();
@@ -134,12 +135,13 @@ pub fn run() {
 
             Event::KeyDown => {
                 let key = app::event_key();
-                let mut st = search_state.borrow_mut();
+                let st = app::event_state();
+                let mut s = search_state.borrow_mut();
 
-                if st.visible && !st.results.is_empty() {
+                if s.visible && !s.results.is_empty() {
                     if key == Key::Down {
-                        st.current = (st.current + 1) % st.results.len();
-                        let (s, e) = st.results[st.current];
+                        s.current = (s.current + 1) % s.results.len();
+                        let (s, e) = s.results[s.current];
                         editor.set_insert_position(s);
                         editor.show_insert_position();
                         buf.borrow_mut().select(s, e);
@@ -148,12 +150,31 @@ pub fn run() {
                     }
 
                     if key == Key::Up {
-                        if st.current == 0 {
-                            st.current = st.results.len() - 1;
+                        if s.current == 0 {
+                            s.current = s.results.len() - 1;
                         } else {
-                            st.current -= 1;
+                            s.current -= 1;
                         }
-                        let (s, e) = st.results[st.current];
+                        let (s, e) = s.results[s.current];
+                        editor.set_insert_position(s);
+                        editor.show_insert_position();
+                        buf.borrow_mut().select(s, e);
+                        update_status();
+                        return true;
+                    }
+
+                    if key == Key::Enter {
+                        let shift = st.contains(EventState::Shift);
+                        if shift {
+                            if s.current == 0 {
+                                s.current = s.results.len() - 1;
+                            } else {
+                                s.current -= 1;
+                            }
+                        } else {
+                            s.current = (s.current + 1) % s.results.len();
+                        }
+                        let (s, e) = s.results[s.current];
                         editor.set_insert_position(s);
                         editor.show_insert_position();
                         buf.borrow_mut().select(s, e);
@@ -193,7 +214,7 @@ pub fn run() {
         let search_state = Rc::clone(&search_state);
 
         win.resize_callback(move |_win, _x, _y, w, h| {
-            let search_h = if search_state.borrow().visible { 30 } else { 0 };
+            let search_h = if search_state.borrow().visible { 44 } else { 0 };
             let editor_y = 30 + search_h;
             let editor_h = h - editor_y - 30;
 

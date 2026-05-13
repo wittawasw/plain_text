@@ -32,7 +32,7 @@ pub fn make_update_status(
         let display = if fp.is_empty() { "(untitled)".into() } else { fp };
 
         status_bar.borrow_mut().set_label(&format!(
-            "Line {}, Col {}   |   {}",
+            "Ln {}, Col {}  |  {}",
             line + 1,
             col + 1,
             display
