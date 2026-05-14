@@ -1,9 +1,7 @@
-use fltk::{frame::Frame, prelude::*};
-use fltk::text::TextEditor;
-use fltk::enums::Align;
+use fltk::{frame::Frame, prelude::*, enums::Align, text::TextEditor};
 use std::{cell::RefCell, rc::Rc};
 
-use super::search::SearchState;
+use super::SearchState;
 
 pub type StatusBar = Rc<RefCell<Frame>>;
 pub type UpdateStatus = Rc<dyn Fn()>;
@@ -11,6 +9,7 @@ pub type UpdateStatus = Rc<dyn Fn()>;
 pub fn create_status_bar(x: i32, y: i32, w: i32, h: i32) -> StatusBar {
     let mut f = Frame::new(x, y, w, h, "");
     f.set_align(Align::Left | Align::Inside);
+    f.set_color(fltk::enums::Color::from_rgb(240, 240, 240));
     Rc::new(RefCell::new(f))
 }
 
@@ -38,4 +37,16 @@ pub fn make_update_status(
             display
         ));
     })
+}
+
+
+
+pub fn show_search_controls(search: &mut super::search::SearchControls) {
+    search.input.show();
+    search.results.borrow_mut().show();
+}
+
+pub fn hide_search_controls(search: &mut super::search::SearchControls) {
+    search.input.hide();
+    search.results.borrow_mut().hide();
 }

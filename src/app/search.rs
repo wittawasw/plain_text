@@ -1,9 +1,7 @@
 use fltk::{
-    enums::CallbackTrigger,
-    button::*,
+    enums::{CallbackTrigger, Align, Event, EventState, Key},
     frame::Frame,
-    group::Group,
-    input::*,
+    input::Input,
     prelude::*,
     text::{TextBuffer, TextEditor},
 };
@@ -16,34 +14,34 @@ pub struct SearchState {
     pub filepath: String,
 }
 
-pub struct SearchUI {
-    pub group: Rc<RefCell<Group>>,
+pub struct SearchControls {
     pub input: Input,
-    pub case_btn: CheckButton,
-    pub prev_btn: Button,
-    pub next_btn: Button,
-    pub status: Rc<RefCell<Frame>>,
+    pub results: Rc<RefCell<Frame>>,
+    pub visible: bool,
 }
 
-pub fn create_search_ui(x: i32, y: i32, w: i32) -> SearchUI {
-    let group = Rc::new(RefCell::new(Group::new(x, y, w, 30, "")));
-    let input = Input::new(60, y + 5, 200, 20, "");
-    let case_btn = CheckButton::new(270, y + 5, 90, 20, "Aa");
-    let prev_btn = Button::new(370, y + 5, 60, 20, "← Prev");
-    let next_btn = Button::new(440, y + 5, 60, 20, "Next →");
-    let status = Rc::new(RefCell::new(Frame::new(510, y + 5, 200, 20, "")));
+pub fn create_search_controls(status_bar_w: i32) -> SearchControls {
+    let sb_x = status_bar_w - 280;
+    let _ = sb_x;
 
-    {
-        let g = group.borrow();
-        Group::end(&*g);
+    let results = Rc::new(RefCell::new(Frame::new(sb_x + 5, 5, 70, 20, "")));
+    results.borrow_mut().set_color(fltk::enums::Color::from_rgb(240, 240, 240));
+    results.borrow_mut().set_label_color(fltk::enums::Color::from_rgb(100, 100, 100));
+    results.borrow_mut().set_align(Align::Left | Align::Inside);
+
+    let mut input = Input::new(sb_x + 80, 5, 200, 20, "");
+    input.set_text_color(fltk::enums::Color::Black);
+    input.set_text_size(12);
+
+    SearchControls {
+        input,
+        results,
+        visible: false,
     }
-    group.borrow_mut().hide();
-
-    SearchUI { group, input, case_btn, prev_btn, next_btn, status }
 }
 
 pub fn attach_search_logic(
-    ui: &mut SearchUI,
+    ui: &mut SearchControls,
     state: Rc<RefCell<SearchState>>,
     buf: Rc<RefCell<TextBuffer>>,
     stylebuf: Rc<RefCell<TextBuffer>>,
@@ -53,7 +51,7 @@ pub fn attach_search_logic(
     let do_search: Rc<dyn Fn(String, bool) -> Vec<(i32, i32)>> = {
         let buf = Rc::clone(&buf);
         let stylebuf = Rc::clone(&stylebuf);
-        let status = Rc::clone(&ui.status);
+        let status = Rc::clone(&ui.results);
 
         Rc::new(move |pattern: String, cs: bool| -> Vec<(i32, i32)> {
             let text = buf.borrow().text();
@@ -109,14 +107,13 @@ pub fn attach_search_logic(
     {
         let do_search = Rc::clone(&do_search);
         let state = Rc::clone(&state);
-        let case_btn = ui.case_btn.clone();
         let mut ed = editor.clone();
         let buf = Rc::clone(&buf);
         let update_status = update_status.clone();
 
         ui.input.set_trigger(CallbackTrigger::Changed);
         ui.input.set_callback(move |inp| {
-            let res = do_search(inp.value(), case_btn.value());
+            let res = do_search(inp.value(), false);
             let mut st = state.borrow_mut();
             st.results = res;
             st.current = 0;
@@ -135,31 +132,64 @@ pub fn attach_search_logic(
         let state = Rc::clone(&state);
         let mut goto = goto_match.clone();
 
-        ui.next_btn.set_callback(move |_| {
-            let mut st = state.borrow_mut();
-            if !st.results.is_empty() {
-                st.current = (st.current + 1) % st.results.len();
-                let (s, e) = st.results[st.current];
-                goto(s, e);
-            }
-        });
-    }
+        ui.input.handle(move |_, ev| match ev {
+            Event::KeyDown => {
+                let key = fltk::app::event_key();
+                let st = fltk::app::event_state();
 
-    {
-        let state = Rc::clone(&state);
-        let mut goto = goto_match.clone();
-
-        ui.prev_btn.set_callback(move |_| {
-            let mut st = state.borrow_mut();
-            if !st.results.is_empty() {
-                if st.current == 0 {
-                    st.current = st.results.len() - 1;
-                } else {
-                    st.current -= 1;
+                if key == Key::Enter {
+                    if st.contains(EventState::Shift) {
+                        let mut st = state.borrow_mut();
+                        if !st.results.is_empty() {
+                            if st.current == 0 {
+                                st.current = st.results.len() - 1;
+                            } else {
+                                st.current -= 1;
+                            }
+                            let (s, e) = st.results[st.current];
+                            goto(s, e);
+                        }
+                        return true;
+                    } else {
+                        let mut st = state.borrow_mut();
+                        if !st.results.is_empty() {
+                            st.current = (st.current + 1) % st.results.len();
+                            let (s, e) = st.results[st.current];
+                            goto(s, e);
+                        }
+                        return true;
+                    }
                 }
-                let (s, e) = st.results[st.current];
-                goto(s, e);
+
+                if st.contains(EventState::Ctrl) || st.contains(EventState::Meta) {
+                    if key == Key::from_char('j') {
+                        let mut st = state.borrow_mut();
+                        if !st.results.is_empty() {
+                            if st.current == 0 {
+                                st.current = st.results.len() - 1;
+                            } else {
+                                st.current -= 1;
+                            }
+                            let (s, e) = st.results[st.current];
+                            goto(s, e);
+                        }
+                        return true;
+                    }
+
+                    if key == Key::from_char('k') {
+                        let mut st = state.borrow_mut();
+                        if !st.results.is_empty() {
+                            st.current = (st.current + 1) % st.results.len();
+                            let (s, e) = st.results[st.current];
+                            goto(s, e);
+                        }
+                        return true;
+                    }
+                }
+
+                false
             }
+            _ => false,
         });
     }
 }
