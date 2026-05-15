@@ -8,15 +8,15 @@ use fltk::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+mod encoding;
 mod icon;
 mod menu;
 mod search;
 mod status;
-mod encoding;
 
-use search::{attach_search_logic, SearchState};
-use status::{create_status_bar, make_update_status, show_search_controls, hide_search_controls};
 use encoding::load_as_utf8;
+use search::{SearchState, attach_search_logic, update_result_status};
+use status::{create_status_bar, hide_search_controls, make_update_status, show_search_controls};
 
 pub fn run() {
     let app = app::App::default();
@@ -54,8 +54,16 @@ pub fn run() {
 
     let stylebuf = Rc::new(RefCell::new(TextBuffer::default()));
     let styles = vec![
-        StyleTableEntry { color: fltk::enums::Color::Black, font: fltk::enums::Font::Helvetica, size: app::font_size() },
-        StyleTableEntry { color: fltk::enums::Color::Black, font: fltk::enums::Font::HelveticaBold, size: app::font_size() },
+        StyleTableEntry {
+            color: fltk::enums::Color::Black,
+            font: fltk::enums::Font::Helvetica,
+            size: app::font_size(),
+        },
+        StyleTableEntry {
+            color: fltk::enums::Color::Black,
+            font: fltk::enums::Font::HelveticaBold,
+            size: app::font_size(),
+        },
     ];
     editor.set_highlight_data(stylebuf.borrow().clone(), styles);
 
@@ -86,13 +94,22 @@ pub fn run() {
                 }
                 false
             }
-            Event::KeyDown | Event::KeyUp | Event::Push | Event::Released | Event::Drag | Event::MouseWheel => {
+            Event::KeyDown
+            | Event::KeyUp
+            | Event::Push
+            | Event::Released
+            | Event::Drag
+            | Event::MouseWheel => {
                 update_status();
                 false
             }
             _ => false,
         });
     }
+    let search_editor = editor.clone();
+    let search_buf = buf.clone();
+    let search_state_clone = search_state.clone();
+    let search_update_status = update_status.clone();
 
     attach_search_logic(
         &mut search_controls.borrow_mut(),
@@ -104,35 +121,42 @@ pub fn run() {
     );
 
     win.handle({
-        let search_state = Rc::clone(&search_state);
+        let search_state = search_state_clone;
         let search_controls = Rc::clone(&search_controls);
         let _status_bar = Rc::clone(&status_bar);
-        let mut editor = editor.clone();
-        let buf = Rc::clone(&buf);
-        let update_status = update_status.clone();
+        let mut editor = search_editor;
+        let buf = search_buf;
+        let update_status = search_update_status;
         let mut win_clone = win.clone();
 
         move |_, ev| match ev {
-            Event::Shortcut => {
+            Event::Shortcut | Event::KeyDown => {
                 let key = app::event_key();
                 let st = app::event_state();
+                let command = st.contains(EventState::Ctrl) || st.contains(EventState::Meta);
+                let text = app::event_text();
+                let ctrl_j = command && (key == Key::from_char('j') || text == "\n");
+                let ctrl_k = command && (key == Key::from_char('k') || text == "\u{b}");
 
-                if key == Key::from_char('f') && (st.contains(EventState::Ctrl) || st.contains(EventState::Meta)) {
+                if command && key == Key::from_char('f') {
                     let mut s = search_state.borrow_mut();
                     s.visible = !s.visible;
 
                     if s.visible {
-                        show_search_controls(&mut search_controls.borrow_mut());
-                        search_controls.borrow_mut().input.take_focus().ok();
+                        s.current = 0;
+                        let mut sc = search_controls.borrow_mut();
+                        show_search_controls(&mut sc);
+                        sc.input.take_focus().ok();
                     } else {
                         hide_search_controls(&mut search_controls.borrow_mut());
                     }
 
+                    update_status();
                     win_clone.redraw();
                     return true;
                 }
 
-                if key == Key::from_char('j') && (st.contains(EventState::Ctrl) || st.contains(EventState::Meta)) {
+                if ctrl_j {
                     let mut s = search_state.borrow_mut();
                     if !s.results.is_empty() {
                         if s.current == 0 {
@@ -140,32 +164,34 @@ pub fn run() {
                         } else {
                             s.current -= 1;
                         }
-                        let (s, e) = s.results[s.current];
-                        editor.set_insert_position(s);
+                        let (start, end) = s.results[s.current];
+                        editor.set_insert_position(start);
                         editor.show_insert_position();
-                        buf.borrow_mut().select(s, e);
+                        buf.borrow_mut().select(start, end);
+                        update_result_status(&search_controls.borrow().results, &s);
                         update_status();
                     }
                     return true;
                 }
 
-                if key == Key::from_char('k') && (st.contains(EventState::Ctrl) || st.contains(EventState::Meta)) {
+                if ctrl_k {
                     let mut s = search_state.borrow_mut();
                     if !s.results.is_empty() {
                         s.current = (s.current + 1) % s.results.len();
-                        let (s, e) = s.results[s.current];
-                        editor.set_insert_position(s);
+                        let (start, end) = s.results[s.current];
+                        editor.set_insert_position(start);
                         editor.show_insert_position();
-                        buf.borrow_mut().select(s, e);
+                        buf.borrow_mut().select(start, end);
+                        update_result_status(&search_controls.borrow().results, &s);
                         update_status();
                     }
                     return true;
                 }
 
-                false
-            }
+                if ev != Event::KeyDown {
+                    return false;
+                }
 
-            Event::KeyDown => {
                 let key = app::event_key();
                 let st = app::event_state();
                 let mut s = search_state.borrow_mut();
@@ -173,10 +199,11 @@ pub fn run() {
                 if s.visible && !s.results.is_empty() {
                     if key == Key::Down {
                         s.current = (s.current + 1) % s.results.len();
-                        let (s, e) = s.results[s.current];
-                        editor.set_insert_position(s);
+                        let (start, end) = s.results[s.current];
+                        editor.set_insert_position(start);
                         editor.show_insert_position();
-                        buf.borrow_mut().select(s, e);
+                        buf.borrow_mut().select(start, end);
+                        update_result_status(&search_controls.borrow().results, &s);
                         update_status();
                         return true;
                     }
@@ -187,10 +214,11 @@ pub fn run() {
                         } else {
                             s.current -= 1;
                         }
-                        let (s, e) = s.results[s.current];
-                        editor.set_insert_position(s);
+                        let (start, end) = s.results[s.current];
+                        editor.set_insert_position(start);
                         editor.show_insert_position();
-                        buf.borrow_mut().select(s, e);
+                        buf.borrow_mut().select(start, end);
+                        update_result_status(&search_controls.borrow().results, &s);
                         update_status();
                         return true;
                     }
@@ -206,14 +234,16 @@ pub fn run() {
                         } else {
                             s.current = (s.current + 1) % s.results.len();
                         }
-                        let (s, e) = s.results[s.current];
-                        editor.set_insert_position(s);
+                        let (start, end) = s.results[s.current];
+                        editor.set_insert_position(start);
                         editor.show_insert_position();
-                        buf.borrow_mut().select(s, e);
+                        buf.borrow_mut().select(start, end);
+                        update_result_status(&search_controls.borrow().results, &s);
                         update_status();
                         return true;
                     }
                 }
+
                 false
             }
 
@@ -221,16 +251,15 @@ pub fn run() {
         }
     });
 
-    menu::add_file_menu_items(
-        &mut menu,
-        &buf,
-        &stylebuf,
-        &search_state,
-        {
-            let update_status = update_status.clone();
-            move || (update_status)()
-        }
-    );
+    menu::add_file_menu_items(&mut menu, &buf, &stylebuf, &search_state, {
+        let update_status = update_status.clone();
+        move || (update_status)()
+    });
+
+    menu::add_search_menu(&mut menu, &search_state, &search_controls, &editor, &buf, {
+        let update_status = update_status.clone();
+        move || (update_status)()
+    });
 
     editor.set_callback({
         let update_status = update_status.clone();
@@ -247,11 +276,11 @@ pub fn run() {
         win.resize_callback(move |_win, _x, _y, w, h| {
             status_bar.borrow_mut().resize(0, h - 30, w, 30);
             editor.resize(0, 30, w, h - 30 - 30);
-            
+
             let sb = status_bar.borrow();
             let sb_w = sb.w();
             drop(sb);
-            
+
             if search_state.borrow().visible {
                 let mut sc = search_controls.borrow_mut();
                 if w < 300 {

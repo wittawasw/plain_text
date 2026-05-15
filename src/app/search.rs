@@ -1,5 +1,5 @@
 use fltk::{
-    enums::{CallbackTrigger, Align, Event, EventState, Key},
+    enums::{Align, CallbackTrigger, Event, EventState, Key},
     frame::Frame,
     input::Input,
     prelude::*,
@@ -17,7 +17,16 @@ pub struct SearchState {
 pub struct SearchControls {
     pub input: Input,
     pub results: Rc<RefCell<Frame>>,
-    pub visible: bool,
+}
+
+pub fn update_result_status(results: &Rc<RefCell<Frame>>, state: &SearchState) {
+    if state.results.is_empty() {
+        results.borrow_mut().set_label("");
+    } else {
+        results
+            .borrow_mut()
+            .set_label(&format!("{} of {}", state.current + 1, state.results.len()));
+    }
 }
 
 pub fn create_search_controls(status_bar_w: i32) -> SearchControls {
@@ -25,19 +34,21 @@ pub fn create_search_controls(status_bar_w: i32) -> SearchControls {
     let _ = sb_x;
 
     let results = Rc::new(RefCell::new(Frame::new(sb_x + 5, 5, 70, 20, "")));
-    results.borrow_mut().set_color(fltk::enums::Color::from_rgb(240, 240, 240));
-    results.borrow_mut().set_label_color(fltk::enums::Color::from_rgb(100, 100, 100));
+    results
+        .borrow_mut()
+        .set_color(fltk::enums::Color::from_rgb(240, 240, 240));
+    results
+        .borrow_mut()
+        .set_label_color(fltk::enums::Color::from_rgb(100, 100, 100));
     results.borrow_mut().set_align(Align::Left | Align::Inside);
 
     let mut input = Input::new(sb_x + 80, 5, 200, 20, "");
     input.set_text_color(fltk::enums::Color::Black);
     input.set_text_size(12);
+    input.hide();
+    results.borrow_mut().hide();
 
-    SearchControls {
-        input,
-        results,
-        visible: false,
-    }
+    SearchControls { input, results }
 }
 
 pub fn attach_search_logic(
@@ -62,8 +73,16 @@ pub fn attach_search_logic(
                 return vec![];
             }
 
-            let hay = if cs { text.clone() } else { text.to_lowercase() };
-            let needle = if cs { pattern.clone() } else { pattern.to_lowercase() };
+            let hay = if cs {
+                text.clone()
+            } else {
+                text.to_lowercase()
+            };
+            let needle = if cs {
+                pattern.clone()
+            } else {
+                pattern.to_lowercase()
+            };
 
             let mut out = vec![];
             let mut pos = 0;
@@ -86,7 +105,11 @@ pub fn attach_search_logic(
                 }
             }
 
-            status.borrow_mut().set_label(&format!("{} of {}", 1, out.len()));
+            if out.is_empty() {
+                status.borrow_mut().set_label("");
+            } else {
+                status.borrow_mut().set_label(&format!("{} of {}", 1, out.len()));
+            }
             out
         })
     };
@@ -95,11 +118,14 @@ pub fn attach_search_logic(
         let buf = Rc::clone(&buf);
         let mut ed = editor.clone();
         let update_status = update_status.clone();
+        let status = Rc::clone(&ui.results);
+        let state = Rc::clone(&state);
 
         move |s: i32, e: i32| {
             ed.set_insert_position(s);
             ed.show_insert_position();
             buf.borrow_mut().select(s, e);
+            update_result_status(&status, &state.borrow());
             update_status();
         }
     };
@@ -110,6 +136,7 @@ pub fn attach_search_logic(
         let mut ed = editor.clone();
         let buf = Rc::clone(&buf);
         let update_status = update_status.clone();
+        let status = Rc::clone(&ui.results);
 
         ui.input.set_trigger(CallbackTrigger::Changed);
         ui.input.set_callback(move |inp| {
@@ -117,6 +144,7 @@ pub fn attach_search_logic(
             let mut st = state.borrow_mut();
             st.results = res;
             st.current = 0;
+            update_result_status(&status, &st);
 
             if let Some((s, e)) = st.results.get(0) {
                 ed.set_insert_position(*s);
@@ -131,11 +159,67 @@ pub fn attach_search_logic(
     {
         let state = Rc::clone(&state);
         let mut goto = goto_match.clone();
+        let mut input = ui.input.clone();
+        let results = Rc::clone(&ui.results);
+        let update_status = update_status.clone();
 
         ui.input.handle(move |_, ev| match ev {
-            Event::KeyDown => {
+            Event::KeyDown | Event::Shortcut => {
                 let key = fltk::app::event_key();
                 let st = fltk::app::event_state();
+                let command = st.contains(EventState::Ctrl) || st.contains(EventState::Meta);
+                let text = fltk::app::event_text();
+                let ctrl_f = command && key == Key::from_char('f');
+                let ctrl_j = command && (key == Key::from_char('j') || text == "\n");
+                let ctrl_k = command && (key == Key::from_char('k') || text == "\u{b}");
+
+                if ctrl_f {
+                    let mut st = state.borrow_mut();
+                    st.visible = !st.visible;
+                    if st.visible {
+                        st.current = 0;
+                        input.show();
+                        results.borrow_mut().show();
+                        input.take_focus().ok();
+                    } else {
+                        input.hide();
+                        results.borrow_mut().hide();
+                    }
+                    update_status();
+                    return true;
+                }
+
+                if ctrl_j {
+                    let mut st = state.borrow_mut();
+                    if !st.results.is_empty() {
+                        if st.current == 0 {
+                            st.current = st.results.len() - 1;
+                        } else {
+                            st.current -= 1;
+                        }
+                        let (s, e) = st.results[st.current];
+                        goto(s, e);
+                    }
+                    return true;
+                }
+
+                if ctrl_k {
+                    let mut st = state.borrow_mut();
+                    if !st.results.is_empty() {
+                        st.current = (st.current + 1) % st.results.len();
+                        let (s, e) = st.results[st.current];
+                        goto(s, e);
+                    }
+                    return true;
+                }
+
+                if command {
+                    return false;
+                }
+
+                if ev != Event::KeyDown {
+                    return false;
+                }
 
                 if key == Key::Enter {
                     if st.contains(EventState::Shift) {
@@ -151,32 +235,6 @@ pub fn attach_search_logic(
                         }
                         return true;
                     } else {
-                        let mut st = state.borrow_mut();
-                        if !st.results.is_empty() {
-                            st.current = (st.current + 1) % st.results.len();
-                            let (s, e) = st.results[st.current];
-                            goto(s, e);
-                        }
-                        return true;
-                    }
-                }
-
-                if st.contains(EventState::Ctrl) || st.contains(EventState::Meta) {
-                    if key == Key::from_char('j') {
-                        let mut st = state.borrow_mut();
-                        if !st.results.is_empty() {
-                            if st.current == 0 {
-                                st.current = st.results.len() - 1;
-                            } else {
-                                st.current -= 1;
-                            }
-                            let (s, e) = st.results[st.current];
-                            goto(s, e);
-                        }
-                        return true;
-                    }
-
-                    if key == Key::from_char('k') {
                         let mut st = state.borrow_mut();
                         if !st.results.is_empty() {
                             st.current = (st.current + 1) % st.results.len();
