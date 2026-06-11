@@ -16,7 +16,10 @@ mod status;
 
 use encoding::load_as_utf8;
 use search::{SearchState, attach_search_logic, update_result_status};
-use status::{create_status_bar, hide_search_controls, make_update_status, show_search_controls};
+use status::{
+    attach_status_path_actions, create_status_bar, hide_search_controls, make_update_status,
+    show_search_controls,
+};
 
 pub fn run() {
     let app = app::App::default();
@@ -35,12 +38,14 @@ pub fn run() {
     editor.set_scrollbar_size(16);
     editor.wrap_mode(text::WrapMode::AtBounds, 0);
     editor.set_text_font(fltk::enums::Font::Courier);
+    editor.remove_key_binding(Key::from_char('f'), Shortcut::Ctrl);
     win.resizable(&editor);
 
     let status_bar = create_status_bar(0, 570, 800, 30);
 
     let sb = status_bar.borrow();
     let sb_w = sb.w();
+    let sb_y = sb.y();
     drop(sb);
 
     let search_state = Rc::new(RefCell::new(SearchState {
@@ -52,7 +57,7 @@ pub fn run() {
     }));
     menu::load_recent_files_into_state(&search_state);
 
-    let search_controls = Rc::new(RefCell::new(search::create_search_controls(sb_w)));
+    let search_controls = Rc::new(RefCell::new(search::create_search_controls(sb_y, sb_w)));
 
     let stylebuf = Rc::new(RefCell::new(TextBuffer::default()));
     let styles = vec![
@@ -70,6 +75,7 @@ pub fn run() {
     editor.set_highlight_data(stylebuf.borrow().clone(), styles);
 
     let update_status = make_update_status(&status_bar, &editor, &search_state);
+    attach_status_path_actions(&status_bar, &search_state);
 
     {
         let buf = Rc::clone(&buf);
@@ -140,7 +146,6 @@ pub fn run() {
         let mut editor = search_editor;
         let buf = search_buf;
         let update_status = search_update_status;
-        let mut win_clone = win.clone();
 
         move |_, ev| match ev {
             Event::Shortcut | Event::KeyDown => {
@@ -150,24 +155,6 @@ pub fn run() {
                 let text = app::event_text();
                 let ctrl_j = command && (key == Key::from_char('j') || text == "\n");
                 let ctrl_k = command && (key == Key::from_char('k') || text == "\u{b}");
-
-                if command && key == Key::from_char('f') {
-                    let mut s = search_state.borrow_mut();
-                    s.visible = !s.visible;
-
-                    if s.visible {
-                        s.current = 0;
-                        let mut sc = search_controls.borrow_mut();
-                        show_search_controls(&mut sc);
-                        sc.input.take_focus().ok();
-                    } else {
-                        hide_search_controls(&mut search_controls.borrow_mut());
-                    }
-
-                    update_status();
-                    win_clone.redraw();
-                    return true;
-                }
 
                 if ctrl_j {
                     let mut s = search_state.borrow_mut();
@@ -292,6 +279,7 @@ pub fn run() {
 
             let sb = status_bar.borrow();
             let sb_w = sb.w();
+            let sb_y = sb.y();
             drop(sb);
 
             if search_state.borrow().visible {
@@ -301,8 +289,8 @@ pub fn run() {
                     search_state.borrow_mut().visible = false;
                 } else {
                     show_search_controls(&mut *sc);
-                    sc.input.set_pos(sb_w - 200, 5);
-                    sc.results.borrow_mut().set_pos(sb_w - 275, 5);
+                    sc.input.set_pos(sb_w - 200, sb_y + 5);
+                    sc.results.borrow_mut().set_pos(sb_w - 275, sb_y + 5);
                 }
             }
         });

@@ -24,17 +24,20 @@ pub fn update_result_status(results: &Rc<RefCell<Frame>>, state: &SearchState) {
     if state.results.is_empty() {
         results.borrow_mut().set_label("");
     } else {
-        results
-            .borrow_mut()
-            .set_label(&format!("{} of {}", state.current + 1, state.results.len()));
+        results.borrow_mut().set_label(&format!(
+            "{} of {}",
+            state.current + 1,
+            state.results.len()
+        ));
     }
 }
 
-pub fn create_search_controls(status_bar_w: i32) -> SearchControls {
+pub fn create_search_controls(status_bar_y: i32, status_bar_w: i32) -> SearchControls {
     let sb_x = status_bar_w - 280;
+    let sb_y = status_bar_y + 5;
     let _ = sb_x;
 
-    let results = Rc::new(RefCell::new(Frame::new(sb_x + 5, 5, 70, 20, "")));
+    let results = Rc::new(RefCell::new(Frame::new(sb_x + 5, sb_y, 70, 20, "")));
     results
         .borrow_mut()
         .set_color(fltk::enums::Color::from_rgb(240, 240, 240));
@@ -43,7 +46,7 @@ pub fn create_search_controls(status_bar_w: i32) -> SearchControls {
         .set_label_color(fltk::enums::Color::from_rgb(100, 100, 100));
     results.borrow_mut().set_align(Align::Left | Align::Inside);
 
-    let mut input = Input::new(sb_x + 80, 5, 200, 20, "");
+    let mut input = Input::new(sb_x + 80, sb_y, 200, 20, "");
     input.set_text_color(fltk::enums::Color::Black);
     input.set_text_size(12);
     input.hide();
@@ -109,7 +112,9 @@ pub fn attach_search_logic(
             if out.is_empty() {
                 status.borrow_mut().set_label("");
             } else {
-                status.borrow_mut().set_label(&format!("{} of {}", 1, out.len()));
+                status
+                    .borrow_mut()
+                    .set_label(&format!("{} of {}", 1, out.len()));
             }
             out
         })
@@ -160,9 +165,6 @@ pub fn attach_search_logic(
     {
         let state = Rc::clone(&state);
         let mut goto = goto_match.clone();
-        let mut input = ui.input.clone();
-        let results = Rc::clone(&ui.results);
-        let update_status = update_status.clone();
 
         ui.input.handle(move |_, ev| match ev {
             Event::KeyDown | Event::Shortcut => {
@@ -170,25 +172,8 @@ pub fn attach_search_logic(
                 let st = fltk::app::event_state();
                 let command = st.contains(EventState::Ctrl) || st.contains(EventState::Meta);
                 let text = fltk::app::event_text();
-                let ctrl_f = command && key == Key::from_char('f');
                 let ctrl_j = command && (key == Key::from_char('j') || text == "\n");
                 let ctrl_k = command && (key == Key::from_char('k') || text == "\u{b}");
-
-                if ctrl_f {
-                    let mut st = state.borrow_mut();
-                    st.visible = !st.visible;
-                    if st.visible {
-                        st.current = 0;
-                        input.show();
-                        results.borrow_mut().show();
-                        input.take_focus().ok();
-                    } else {
-                        input.hide();
-                        results.borrow_mut().hide();
-                    }
-                    update_status();
-                    return true;
-                }
 
                 if ctrl_j {
                     let mut st = state.borrow_mut();
