@@ -45,9 +45,8 @@ fn open_file_location(path: &str) {
 
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("explorer.exe")
-            .arg(format!("/select,{}", path))
-            .spawn();
+        let folder = Path::new(path).parent().unwrap_or_else(|| Path::new(path));
+        let _ = Command::new("explorer.exe").arg(folder).spawn();
     }
 
     #[cfg(not(target_os = "windows"))]
