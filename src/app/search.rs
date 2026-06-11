@@ -12,6 +12,7 @@ pub struct SearchState {
     pub current: usize,
     pub visible: bool,
     pub filepath: String,
+    pub recent_files: Vec<String>,
 }
 
 pub struct SearchControls {

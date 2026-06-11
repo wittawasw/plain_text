@@ -48,7 +48,9 @@ pub fn run() {
         current: 0,
         visible: false,
         filepath: "".into(),
+        recent_files: vec![],
     }));
+    menu::load_recent_files_into_state(&search_state);
 
     let search_controls = Rc::new(RefCell::new(search::create_search_controls(sb_w)));
 
@@ -74,6 +76,7 @@ pub fn run() {
         let stylebuf = Rc::clone(&stylebuf);
         let update_status = update_status.clone();
         let state = Rc::clone(&search_state);
+        let mut recent_menu = menu.clone();
 
         editor.handle(move |_, ev| match ev {
             Event::Paste => {
@@ -89,6 +92,16 @@ pub fn run() {
 
                     state.borrow_mut().filepath = dropped.clone();
                     update_status();
+                    let update_status_recent = update_status.clone();
+                    let recent_status_cb = move || (update_status_recent)();
+                    menu::remember_recent_and_refresh(
+                        &mut recent_menu,
+                        &buf,
+                        &stylebuf,
+                        &state,
+                        &recent_status_cb,
+                        &dropped,
+                    );
 
                     return true;
                 }
